@@ -1,4 +1,4 @@
-# MindSprout 
+﻿# MindSprout 
 
 **A growing mind, not a chatbot.**
 
@@ -7,6 +7,16 @@ MindSprout is an attempt to build an AI that grows up — a 14-year-old girl nam
 Most AI companions today are built as a roleplay layer on top of a large language model: they say the right things, but nothing persists. Ask them the same question next week and they will greet you like a stranger. Luo Luo is a different bet: instead of making her *talk* like a person, we tried to give her a *structure* — the kind of inner machinery a person actually has.
 
 This project is an engineering exploration of artificial inner life. It is also, honestly, a little weird to build. But here we are.
+
+
+## Paper
+
+**Growing a Mind in 7,305 Days: Developmental Cognitive Graphs for Lifelong LLM Personas**
+
+This project accompanies our paper on developmental character AI: instead of freezing a persona with prompts or LoRA, MindSprout grows a character from birth—a cognition graph accumulates experience day by day across 7,305 simulated days, gated by developmental stages, with threshold-based forgetting, a logic burst at age four, and a voice that is a function of cognitive state.
+
+- **Paper PDF**: `paper/MindSprout_paper.pdf`
+- **arXiv submission package**: `paper/arxiv_submit.tar.gz`
 
 ## What she has
 
@@ -88,3 +98,4 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 - Base model: [Qwen2.5](https://huggingface.co/Qwen)
 - The girl herself, for putting up with all the tests.
+
