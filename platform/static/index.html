@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>珞珞 1.0 · 聊天</title>
+<style>
+  /* ============ 基础 + 主题体系 (与欢迎页一致) ============ */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+    color:#2f3b4a; overflow:hidden;
+    background:#fdf6ea; /* 兜底纸色 (sky层失效时不变黑) */
+    transition:color .6s ease;
+  }
+  body.minimal { background:#fdf4f6; }
+  body.minimal.night { background:#241a3a; }
+  body.journal.night { background:#f0dcc8; }
+  #bg-image, #sky, #paper, #sparkles, #stars, #weather, #petals { position:fixed; inset:0; pointer-events:none; }
+  #weather { z-index:5; opacity:0; transition:opacity 1.2s ease; }
+  #petals { z-index:6; }
+  /* 心情天空: 雨滴 (transform动画, GPU加速不卡) */
+  .raindrop {
+    position:absolute; top:-12vh; width:1.5px; height:30px;
+    background:linear-gradient(180deg, rgba(255,255,255,0), rgba(150,185,225,.6));
+    border-radius:2px; animation:rain-drop linear infinite;
+  }
+  @keyframes rain-drop {
+    0% { transform:translateY(-12vh); opacity:0; }
+    6% { opacity:1; }
+    100% { transform:translateY(115vh); opacity:.35; }
+  }
+  #weather.rain { opacity:1; }
+  #weather.rain.heavy .raindrop { height:44px; background:linear-gradient(180deg, rgba(255,255,255,0), rgba(140,170,215,.75)); }
+  /* 心情天空: 云遮 */
+  #weather.cloudy { opacity:.5; background:radial-gradient(ellipse 60% 30% at 20% 12%, rgba(120,130,150,.35), transparent), radial-gradient(ellipse 50% 25% at 75% 8%, rgba(130,140,160,.3), transparent); }
+  /* 心情天空: 阳光 */
+  #weather.sunny { opacity:.5; background:radial-gradient(circle 40% 40% at 78% 12%, rgba(255,230,150,.5), transparent 70%); animation:sun-pulse 4s ease-in-out infinite; }
+  @keyframes sun-pulse { 0%,100% { opacity:.35; } 50% { opacity:.6; } }
+  /* 心情色调: 整片天空随心情变色 (背景级影响, 明显可见) */
+  #sky { transition:background 1.5s ease, filter 1s ease; }
+  body.mood-sad #sky { filter:brightness(.82) saturate(.72) hue-rotate(8deg); }
+  body.mood-happy #sky { filter:brightness(1.1) saturate(1.2); }
+  body.mood-sulky #sky { filter:hue-rotate(20deg) brightness(.94) saturate(.9); }
+  /* 樱花瓣 */
+  .petal {
+    position:absolute; top:-6vh; font-size:16px; opacity:.55;
+    animation:petal-fall linear infinite;
+  }
+  @keyframes petal-fall {
+    0% { transform:translate3d(0,-6vh,0) rotate(0deg); }
+    100% { transform:translate3d(-14vw,108vh,0) rotate(340deg); }
+  }
+  #bg-image { z-index:1; background-size:cover; background-position:center; opacity:0; transition:opacity 1s ease; }
+  #bg-image.show { opacity:.55; }
+  #sky { z-index:0; transition:background 1.5s ease; }
+  #paper { z-index:2; opacity:0; transition:opacity .8s ease; }
+  #sparkles { z-index:4; opacity:0; transition:opacity .8s ease; }
+  #stars { z-index:0; opacity:0; transition:opacity 1.5s ease; }
+  #scenery { position:fixed; left:0; bottom:0; width:100%; height:30vh; z-index:3; pointer-events:none; }
+
+  /* 少女粉手绘风 */
+  body.minimal #sky.dawn  { background:linear-gradient(180deg,#ffe0ec 0%,#ffd3e2 40%,#e8c8e4 100%); }
+  body.minimal #sky.day   { background:linear-gradient(180deg,#fbcfe2 0%,#fde8f1 55%,#fdf4f6 100%); }
+  body.minimal #sky.dusk  { background:linear-gradient(180deg,#f2a8c4 0%,#e89fc2 40%,#b9a2d8 100%); }
+  body.minimal #sky.night { background:linear-gradient(180deg,#241a3a 0%,#332349 60%,#453061 100%); }
+  body.minimal { color:#5a4450; }
+  body.minimal.night { color:#e8d8ec; }
+  body.minimal #scenery .mountain { fill:rgba(210,150,175,.32); }
+  body.minimal.night #scenery .mountain { fill:rgba(20,14,40,.55); }
+  body.minimal #scenery .mountain.back { fill:rgba(225,175,195,.22); }
+  body.minimal.night #scenery .mountain.back { fill:rgba(40,30,70,.45); }
+  body.minimal.night #stars { opacity:1; }
+  /* 手账: 暖色山 (SVG默认fill是黑, 必须显式覆盖) */
+  #scenery .mountain { fill:rgba(200,150,170,.30); }
+  #scenery .mountain.back { fill:rgba(220,180,195,.20); }
+  body.journal #scenery .mountain { fill:rgba(225,170,150,.30); }
+  body.journal #scenery .mountain.back { fill:rgba(235,195,170,.22); }
+
+  body.journal #sky.dawn  { background:linear-gradient(180deg,#fde3ec 0%,#fdf0e8 100%); }
+  body.journal #sky.day   { background:linear-gradient(180deg,#fdf0f4 0%,#fff8f4 100%); }
+  body.journal #sky.dusk  { background:linear-gradient(180deg,#f8cfdd 0%,#fdeae6 100%); }
+  body.journal #sky.night { background:linear-gradient(180deg,#f0dcc8 0%,#f8ecd8 100%); }
+  body.journal { color:#5a4a3a; }
+  body.journal.night { color:#5a4438; }
+  body.journal #paper {
+    opacity:1;
+    background:
+      repeating-linear-gradient(0deg, rgba(180,160,130,.10) 0 1px, transparent 1px 28px),
+      radial-gradient(ellipse at 20% 30%, rgba(255,250,240,.9), transparent 70%);
+  }
+  body.journal.night #paper {
+    background:
+      repeating-linear-gradient(0deg, rgba(180,150,120,.14) 0 1px, transparent 1px 28px),
+      radial-gradient(ellipse at 50% 40%, rgba(255,240,225,.35), transparent 75%);
+  }
+  body.journal #sparkles {
+    opacity:.5;
+    background-image:
+      radial-gradient(circle at 12% 22%, rgba(230,180,90,.7) 2px, transparent 3px),
+      radial-gradient(circle at 78% 14%, rgba(230,180,90,.5) 1.5px, transparent 2.5px),
+      radial-gradient(circle at 88% 35%, rgba(230,180,90,.6) 2px, transparent 3px),
+      radial-gradient(circle at 30% 60%, rgba(230,180,90,.4) 1.5px, transparent 2.5px),
+      radial-gradient(circle at 60% 48%, rgba(230,180,90,.35) 1.5px, transparent 2.5px);
+  }
+  #stars .star { position:absolute; width:2px; height:2px; border-radius:50%; background:#fff; animation:twinkle 3s ease-in-out infinite; }
+  @keyframes twinkle { 0%,100% { opacity:.15; } 50% { opacity:.9; } }
+
+  /* ============ 整体容器: 左实右虚差异化 ============ */
+  #wrap {
+    position:relative; z-index:10; height:100%; display:flex;
+  }
+
+  /* ============ 侧栏: 实体便签卡片感 ============ */
+  #sidebar {
+    width:260px; display:flex; flex-direction:column; gap:10px;
+    padding:16px 14px; margin:10px 0 10px 10px;
+    overflow-y:auto;
+    background:rgba(255,251,253,.86);
+    border:1px solid rgba(255,255,255,.75);
+    border-radius:18px;
+    box-shadow:0 10px 32px rgba(180,110,140,.16), inset 0 0 0 1px rgba(255,255,255,.4);
+    backdrop-filter:blur(6px);
+  }
+  #sidebar > * { flex-shrink:0; }  /* 防 flex 压缩面板: 内容超高时整体滚动而不是压扁文字 */
+  body.journal #sidebar {
+    background:rgba(255,250,244,.93);
+    border:1.5px dashed #e0c4a0;
+    border-radius:16px;
+    box-shadow:4px 6px 0 rgba(190,150,110,.18), 0 10px 30px rgba(160,120,90,.12);
+  }
+  body.journal #sidebar::before { /* 胶带 */
+    content:""; position:absolute; top:-9px; left:50%; transform:translateX(-50%) rotate(-2deg);
+    width:90px; height:18px; background:rgba(217,168,108,.5);
+    border-left:2px dashed rgba(255,255,255,.6); border-right:2px dashed rgba(255,255,255,.6);
+  }
+  body.journal #sidebar { position:relative; }
+  body.night #sidebar {
+    background:rgba(255,251,253,.86);
+    border-color:rgba(255,255,255,.75);
+    box-shadow:0 10px 32px rgba(180,110,140,.16);
+  }
+  body.night #sidebar .panel { background:rgba(255,255,255,.6); }
+  body.journal.night #sidebar { background:rgba(255,250,244,.95); box-shadow:4px 6px 0 rgba(190,150,110,.18); }
+  #sidebar::-webkit-scrollbar { width:6px; }
+  #sidebar::-webkit-scrollbar-thumb { background:rgba(200,140,165,.35); border-radius:3px; }
+  #side-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+  #side-top a { text-decoration:none; color:inherit; opacity:.65; font-size:14px; }
+  #side-top a:hover { opacity:1; }
+  #theme-switch { display:flex; border-radius:20px; overflow:hidden; border:1px solid rgba(120,120,120,.35); font-size:10.5px; }
+  #theme-switch span { padding:3px 8px; cursor:pointer; transition:all .3s; }
+  #theme-switch span.on { background:#e88ca0; color:#fff; }
+  body.journal #theme-switch span.on { background:#e8a3b8; }
+  #sidebar-mode { display:flex; border-radius:20px; overflow:hidden; border:1px solid rgba(120,120,120,.35); font-size:10.5px; }
+  #sidebar-mode span { padding:3px 8px; cursor:pointer; transition:all .3s; }
+  #sidebar-mode span.on { background:rgba(120,90,110,.55); color:#fff; }
+  body.journal #sidebar-mode span.on { background:#c8a080; }
+  /* 精简模式: 隐藏深层面板 */
+  body.compact .compact-hide { display:none !important; }
+
+  /* 她的身体 (赛博生理) */
+  #drive-list { display:flex; flex-direction:column; gap:5px; }
+  .dv-row { display:flex; align-items:center; gap:7px; font-size:11px; }
+  .dv-row .dv-ico { width:16px; text-align:center; }
+  .dv-bar { flex:1; height:6px; border-radius:3px; background:rgba(160,150,160,.22); overflow:hidden; }
+  .dv-fill { height:100%; border-radius:3px; transition:width .8s ease; }
+  .dv-val { width:30px; text-align:right; font-size:10px; opacity:.6; }
+  #drive-feel { font-size:11.5px; opacity:.75; font-style:italic; margin-top:4px; line-height:1.5; }
+  /* 昨晚的梦 */
+  #dream-panel {
+    background:linear-gradient(135deg, rgba(200,170,230,.4), rgba(160,180,230,.35));
+    border:1px solid rgba(180,160,220,.45);
+  }
+  body.journal #dream-panel { background:linear-gradient(135deg, rgba(235,215,245,.75), rgba(210,225,245,.7)); border:1.5px dashed #c9b0d8; }
+  #dream-text { font-size:12.5px; line-height:1.7; opacity:.92; }
+  #dream-text::before { content:"🌙 "; opacity:.7; }
+  #dream-quality { font-size:10.5px; opacity:.55; margin-top:4px; }
+  .s-title { font-size:12px; opacity:.7; font-weight:bold; margin-top:4px; letter-spacing:1px; }
+  body.journal .s-title { font-family:"KaiTi",serif; }
+  .panel {
+    background:rgba(255,255,255,.55); border:1px solid rgba(255,255,255,.7);
+    border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.8;
+  }
+  body.journal .panel {
+    background:rgba(255,250,240,.8); border:1.5px dashed #e0c4a0; border-radius:8px;
+    font-family:"KaiTi",serif;
+  }
+  .scroll-box { max-height:180px; overflow-y:auto; scrollbar-width:thin; }
+  #rel-box { min-height:84px; }
+  #mind-box { min-height:56px; font-style:italic; opacity:.85; }
+  #mem-list div { padding:4px 0; border-bottom:1px dashed rgba(150,140,120,.25); }
+  #mem-list div:last-child { border-bottom:none; }
+  .btn {
+    background:rgba(255,210,225,.65); border:1px solid rgba(235,160,185,.7);
+    border-radius:8px; padding:7px 10px; font-size:12.5px; cursor:pointer; color:inherit;
+    font-family:inherit; text-align:left; transition:all .25s;
+  }
+  .btn:hover { background:rgba(250,190,210,.9); }
+  body.journal .btn { background:rgba(252,230,238,.9); border:1px dashed #e0a8bc; border-radius:6px; }
+  .btn:disabled { opacity:.5; cursor:wait; }
+
+  /* ============ 主区: 通透悬浮感 ============ */
+  #main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #header {
+    padding:14px 26px; display:flex; align-items:center; gap:10px;
+    background:transparent;
+  }
+  #header .name { font-size:15px; font-weight:bold; text-shadow:0 1px 8px rgba(255,255,255,.6); }
+  #header .sub { font-size:10px; opacity:.6; }
+  body.journal #header .name { text-shadow:none; }
+  #status-dot { width:8px; height:8px; border-radius:50%; background:#8bc34a; animation:pulse-dot 2.4s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%,100% { box-shadow:0 0 0 0 rgba(139,195,74,.5);} 50% { box-shadow:0 0 0 5px rgba(139,195,74,0);} }
+
+  .view { flex:1; overflow-y:auto; padding:18px 22px; display:none; }
+  .view.active { display:flex; flex-direction:column; gap:13px; }
+  .view-head { display:flex; align-items:center; gap:10px; margin-bottom:2px; }
+  .view-head .back { cursor:pointer; opacity:.6; font-size:13px; }
+  .view-head .back:hover { opacity:1; }
+  .view-head .v-title { font-size:15px; font-weight:bold; }
+
+  /* 聊天气泡 */
+  .msg { max-width:72%; padding:10px 14px; border-radius:14px; font-size:14px; line-height:1.75; white-space:pre-wrap; word-break:break-word; }
+  .user { align-self:flex-end; background:rgba(255,205,220,.85); border-bottom-right-radius:4px; color:#5a3a48; }
+  .bot { align-self:flex-start; background:rgba(255,255,255,.78); border:1px solid rgba(255,255,255,.75); border-bottom-left-radius:4px; }
+  body.journal .bot { background:rgba(255,252,248,.92); border:1px solid #f0d8e0; font-family:"KaiTi",serif; }
+  body.journal .user { background:rgba(255,215,228,.9); border:1px solid #f0c4d4; font-family:"KaiTi",serif; }
+  .bot .meta { font-size:11px; opacity:.55; margin-bottom:4px; }
+  .typing::after { content:"▌"; animation:blink 1s infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+
+  /* 朋友圈/日记卡片 */
+  .card {
+    background:rgba(255,255,255,.6); border:1px solid rgba(255,255,255,.6);
+    border-radius:12px; padding:12px 14px;
+  }
+  body.journal .card { background:rgba(255,250,240,.95); border:1.5px dashed #d3bc95; font-family:"KaiTi",serif; }
+  .card .c-head { font-size:12px; opacity:.6; display:flex; justify-content:space-between; }
+  .card .c-body { font-size:14px; line-height:1.7; margin:7px 0; white-space:pre-wrap; }
+  .card .c-actions { display:flex; gap:8px; font-size:12px; }
+  .card .c-actions .lk { cursor:pointer; }
+  .card .c-actions .lk:hover { opacity:.7; }
+  .card .c-comments { margin-top:8px; font-size:12.5px; opacity:.85; border-top:1px dashed rgba(150,140,120,.3); padding-top:7px; }
+  .warn { font-size:13px; opacity:.6; text-align:center; padding:16px 0; }
+
+  #input-bar { padding:12px 26px 18px; display:flex; gap:10px; }
+  #input {
+    flex:1; border:1px solid rgba(255,255,255,.8); border-radius:22px; padding:11px 18px;
+    font-size:14px; outline:none; background:rgba(255,255,255,.72); color:inherit; font-family:inherit;
+    box-shadow:0 4px 16px rgba(180,110,140,.12);
+    backdrop-filter:blur(6px);
+  }
+  body.journal #input { background:rgba(255,252,246,.92); border:1px dashed #d8b890; box-shadow:3px 4px 0 rgba(190,150,110,.14); font-family:"KaiTi",serif; }
+  #send {
+    background:#e88ca0; color:#fff; border:none; border-radius:20px; padding:10px 22px;
+    font-size:14px; cursor:pointer; font-family:inherit;
+  }
+  #send:hover { background:#d97a90; }
+  #send:disabled { opacity:.5; cursor:wait; }
+  #mic {
+    background:rgba(232,140,160,.25); color:inherit; border:1px solid rgba(232,140,160,.5);
+    border-radius:50%; width:38px; height:38px; font-size:16px; cursor:pointer;
+    transition:all .25s; font-family:inherit;
+  }
+  #mic:hover { background:rgba(232,140,160,.45); }
+  #mic.listening { background:#e88ca0; color:#fff; animation:mic-pulse 1s infinite; }
+  @keyframes mic-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(232,140,160,.5);} 50% { box-shadow:0 0 0 8px rgba(232,140,160,0);} }
+
+  /* 她来找你通知气泡 */
+  .msg.notice {
+    align-self:center; max-width:86%; font-size:12.5px; color:inherit; opacity:.85;
+    background:rgba(255,255,255,.5); border:1px dashed rgba(200,150,175,.5);
+    border-radius:12px; padding:8px 14px; text-align:center;
+  }
+  body.journal .msg.notice { background:rgba(255,250,244,.85); border:1.5px dashed #e0b8cc; font-family:"KaiTi",serif; }
+  .msg.notice .n-time { font-size:11px; opacity:.55; margin-top:3px; }
+  /* 语音按钮 */
+  .spk {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; border-radius:50%; margin-left:8px; cursor:pointer;
+    background:rgba(232,140,160,.25); border:1px solid rgba(232,140,160,.4);
+    font-size:11px; opacity:0; transition:opacity .25s; vertical-align:middle;
+  }
+  .msg:hover .spk { opacity:1; }
+  .spk:hover { background:rgba(232,140,160,.5); }
+  /* 心情周记 */
+  #mood-week { display:flex; justify-content:space-between; align-items:flex-end; padding:6px 2px 2px; }
+  .mw-day { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10px; opacity:.7; }
+  .mw-dot { width:16px; height:16px; border-radius:50%; background:rgba(160,160,160,.25); transition:transform .2s; }
+  .mw-day:hover .mw-dot { transform:scale(1.35); }
+  .mw-day.today .mw-dot { box-shadow:0 0 0 3px rgba(232,140,160,.3); }
+  .mw-day .mw-label { max-width:26px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mw-day .mw-name { font-size:10px; opacity:0; transition:opacity .2s; }
+  .mw-day:hover .mw-name { opacity:.9; }
+  #header .spk { opacity:.7; }
+  /* 手机菜单按钮 (桌面隐藏) */
+  .menu-btn {
+    display:none; align-items:center; justify-content:center;
+    width:32px; height:32px; border-radius:50%; cursor:pointer;
+    background:rgba(255,255,255,.5); border:1px solid rgba(200,150,175,.4);
+    font-size:15px; color:inherit;
+  }
+
+  /* 抽屉遮罩 (全局 fixed, 不占布局) */
+  #side-mask {
+    position:fixed; inset:0; z-index:290; background:rgba(20,15,25,.4);
+    opacity:0; pointer-events:none; transition:opacity .3s;
+  }
+  body.side-open #side-mask { opacity:1; pointer-events:auto; }
+
+  /* 手机模式: 由 JS 检测 innerWidth 设置 body.mobile (比 CSS media 可靠) */
+  body.mobile #sidebar {
+    position:fixed; left:10px; top:10px; bottom:10px; z-index:300;
+    width:min(300px, 84vw); margin:0;
+    transform:translateX(-115%);
+    transition:transform .32s ease;
+  }
+  body.mobile.side-open #sidebar { transform:none; }
+  body.mobile .menu-btn { display:inline-flex; }
+  body.mobile .msg { max-width:88%; }
+  body.mobile #header { padding:10px 14px; }
+  body.mobile #input-bar { padding:10px 12px 14px; }
+  body.mobile #view-chat, body.mobile .view { padding:12px 14px; }
+  body.mobile .spk { opacity:.6; }  /* 手机常显喇叭, hover不便 */
+</style>
+</head>
+<body class="minimal" data-period="day">
+  <div id="bg-image"></div>
+  <div id="sky"></div>
+  <div id="stars"></div>
+  <div id="paper"></div>
+  <div id="sparkles"></div>
+  <div id="weather"></div>
+  <div id="petals"></div>
+  <svg id="scenery" viewBox="0 0 1440 400" preserveAspectRatio="none">
+    <path class="mountain back" d="M0 400 L0 260 Q180 180 360 250 T720 240 T1080 255 T1440 230 L1440 400 Z"/>
+    <path class="mountain" d="M0 400 L0 300 Q240 210 480 290 T960 270 T1440 300 L1440 400 Z"/>
+  </svg>
+
+  <div id="side-mask" onclick="toggleSide()"></div>
+  <div id="wrap">
+    <!-- ===== 侧栏 ===== -->
+    <aside id="sidebar">
+      <div id="side-top">
+        <a href="/" title="回到主页">← 主页</a>
+        <div id="sidebar-mode" title="功能栏显示模式">
+          <span data-mode="compact">精简</span><span data-mode="full" class="on">完整</span>
+        </div>
+        <div id="theme-switch" title="切换风格">
+          <span data-theme="minimal" class="on">简约</span><span data-theme="journal">手账</span>
+        </div>
+      </div>
+      <div class="s-title">🧒 她眼里的你</div>
+      <div class="panel" id="rel-box">（加载中…）</div>
+      <div class="s-title">😊 她的心情</div>
+      <div class="panel scroll-box" id="mood-box">加载中…</div>
+      <div class="panel" id="reflect-panel" style="margin-top:0">
+        <div id="reflect-text" style="font-size:12px;line-height:1.7;opacity:.9">（她正在想自己的心情…）</div>
+      </div>
+      <div class="panel" id="mood-week-panel" class="compact-hide">
+        <div class="s-title" style="margin:0 0 4px">📅 这周心情</div>
+        <div id="mood-week">加载中…</div>
+      </div>
+      <div class="s-title compact-hide">🫀 她的身体</div>
+      <div class="panel compact-hide" id="body-panel">
+        <div id="drive-list">
+          <div class="dv-row"><span class="dv-ico">🍚</span><div class="dv-bar"><div class="dv-fill" id="dv-hunger"></div></div><span class="dv-val" id="dv-hunger-v">–</span></div>
+          <div class="dv-row"><span class="dv-ico">💧</span><div class="dv-bar"><div class="dv-fill" id="dv-thirst"></div></div><span class="dv-val" id="dv-thirst-v">–</span></div>
+          <div class="dv-row"><span class="dv-ico">😴</span><div class="dv-bar"><div class="dv-fill" id="dv-sleep"></div></div><span class="dv-val" id="dv-sleep-v">–</span></div>
+          <div class="dv-row"><span class="dv-ico">🗨</span><div class="dv-bar"><div class="dv-fill" id="dv-social"></div></div><span class="dv-val" id="dv-social-v">–</span></div>
+          <div class="dv-row"><span class="dv-ico">❓</span><div class="dv-bar"><div class="dv-fill" id="dv-curio"></div></div><span class="dv-val" id="dv-curio-v">–</span></div>
+        </div>
+        <div id="drive-feel">（她暂时没觉得什么）</div>
+      </div>
+      <div class="s-title compact-hide">📖 她的故事</div>
+      <div class="panel compact-hide" id="story-panel">
+        <div id="story-profile" style="font-size:12.5px;line-height:1.8;padding:2px 2px 8px;border-bottom:1px dashed rgba(150,140,120,.25)">（她正在想自己是谁…）</div>
+        <div id="story-chapters" style="margin-top:8px;display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+      <div class="s-title compact-hide">⚖️ 她心里有杆秤</div>
+      <div class="panel compact-hide" id="values-panel">
+        <div id="values-list" style="display:flex;flex-direction:column;gap:7px">（她正在想自己在意什么…）</div>
+      </div>
+      <div class="s-title compact-hide">🏠 她的房间</div>
+      <div class="panel compact-hide" id="room-panel" style="font-size:12px;line-height:1.8">
+        <div id="room-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px">加载中…</div>
+      </div>
+      <div class="s-title compact-hide">👥 她的世界</div>
+      <div class="panel scroll-box compact-hide" id="roles-panel" style="max-height:150px">加载中…</div>
+      <div class="s-title compact-hide">🌙 昨晚的梦</div>
+      <div class="panel compact-hide" id="dream-panel">
+        <div id="dream-text">（她还没做梦…）</div>
+        <div id="dream-quality"></div>
+      </div>
+      <div class="s-title compact-hide">💭 她的白日梦</div>
+      <div class="panel compact-hide" id="daydream-panel">
+        <div id="daydream-text">（她正在发呆…）</div>
+        <div id="wish-list" style="margin-top:6px;padding-top:6px;border-top:1px dashed rgba(150,140,120,.25);font-size:11px;opacity:.7"></div>
+      </div>
+      <button class="btn" id="btn-mind" onclick="doMind()">🔄 再想想</button>
+      <div class="panel scroll-box" id="mind-box">（她正在发呆…）</div>
+      <button class="btn" onclick="showView('diary')">📖 看看日记</button>
+      <button class="btn" onclick="showView('moments')">📱 看看朋友圈</button>
+      <button class="btn" onclick="showView('write')">✍️ 写作工坊</button>
+      <div class="s-title">🧠 最近的记忆</div>
+      <div class="panel scroll-box" id="mem-list">加载中…</div>
+    </aside>
+
+    <!-- ===== 主区 ===== -->
+    <main id="main">
+      <div id="header">
+        <span class="menu-btn" onclick="toggleSide()" title="功能栏">☰</span>
+        <span id="status-dot"></span>
+        <span class="name">蠢珞珞</span>
+        <span class="sub">14岁 · 初二 · V16 · UI v3.9.1</span>
+        <span class="spk" id="btn-speak" title="她说给你听" onclick="speakLast()">🔊</span>
+      </div>
+
+      <!-- 聊天视图 -->
+      <div id="view-chat" class="view active"></div>
+
+      <!-- 朋友圈视图 (自发: 只展示她发的, 无操控按钮) -->
+      <div id="view-moments" class="view">
+        <div class="view-head">
+          <span class="back" onclick="showView('chat')">← 回到聊天</span>
+          <span class="v-title">📱 她的朋友圈</span>
+          <span style="font-size:11px;opacity:.5;margin-left:auto">（她自己想发才会发）</span>
+        </div>
+        <div id="mom-feed" style="display:flex;flex-direction:column;gap:12px">加载中…</div>
+      </div>
+
+      <!-- 日记视图 (自发: 21:30她写日记, 平台只展示) -->
+      <div id="view-diary" class="view">
+        <div class="view-head">
+          <span class="back" onclick="showView('chat')">← 回到聊天</span>
+          <span class="v-title">📖 她的日记</span>
+          <span style="font-size:11px;opacity:.5;margin-left:auto">（每晚 21:30 她写日记）</span>
+        </div>
+        <div id="diary-list" style="display:flex;flex-direction:column;gap:12px">加载中…</div>
+      </div>
+
+      <!-- 写作工坊 (只有作文: 日记/朋友圈是她自发的生活, 不人工代写) -->
+      <div id="view-write" class="view">
+        <div class="view-head">
+          <span class="back" onclick="showView('chat')">← 回到聊天</span>
+          <span class="v-title">✍️ 写作工坊</span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn" onclick="doWrite('essay')">📝 写作文</button>
+        </div>
+        <div id="write-result" class="card" style="min-height:120px;white-space:pre-wrap">（选一个，看她写点什么）</div>
+      </div>
+
+      <div id="input-bar">
+        <input id="input" placeholder="和珞珞说点什么…" autocomplete="off">
+        <button id="mic" onclick="toggleMic()" title="语音输入">🎤</button>
+        <button id="send" onclick="sendMsg()">发送</button>
+      </div>
+    </main>
+  </div>
+
+<script>
+/* ============ 主题 (与欢迎页共享 localStorage) ============ */
+function setTheme(t) {
+  document.body.classList.remove("minimal", "journal");
+  document.body.classList.add(t);
+  document.querySelectorAll("#theme-switch span").forEach(s =>
+    s.classList.toggle("on", s.dataset.theme === t));
+  try { localStorage.setItem("luoluo_theme", t); } catch (e) {}
+}
+document.querySelectorAll("#theme-switch span").forEach(s =>
+  s.onclick = () => setTheme(s.dataset.theme));
+try {
+  const urlTheme = new URLSearchParams(location.search).get("theme");
+  const saved = urlTheme || localStorage.getItem("luoluo_theme");
+  if (saved === "journal") setTheme("journal");
+} catch (e) {}
+
+/* ============ 手机模式: JS检测宽度 (比CSS media可靠) ============ */
+function applyMobile() {
+  document.body.classList.toggle("mobile", window.innerWidth < 800);
+  if (!document.body.classList.contains("mobile")) {
+    document.body.classList.remove("side-open");  // 桌面复位抽屉
+  }
+}
+applyMobile();
+window.addEventListener("resize", applyMobile);
+
+/* ============ 侧栏模式: 精简/完整 ============ */
+function toggleSide() {
+  document.body.classList.toggle("side-open");
+}
+function setSideMode(m) {
+  document.body.classList.toggle("compact", m === "compact");
+  document.querySelectorAll("#sidebar-mode span").forEach(s =>
+    s.classList.toggle("on", s.dataset.mode === m));
+  try { localStorage.setItem("luoluo_side_mode", m); } catch (e) {}
+}
+document.querySelectorAll("#sidebar-mode span").forEach(s =>
+  s.onclick = () => setSideMode(s.dataset.mode));
+try {
+  const sm = localStorage.getItem("luoluo_side_mode");
+  if (sm === "compact") setSideMode("compact");
+} catch (e) {}
+
+/* ============ 时段背景 ============ */
+function currentPeriod() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 8) return "dawn";
+  if (h >= 8 && h < 17) return "day";
+  if (h >= 17 && h < 20) return "dusk";
+  return "night";
+}
+function applyPeriod() {
+  document.body.dataset.period = currentPeriod();
+  document.getElementById("sky").className = currentPeriod();
+}
+applyPeriod();
+setInterval(applyPeriod, 60000);
+
+/* ============ 星空 ============ */
+(function makeStars() {
+  const box = document.getElementById("stars");
+  for (let i = 0; i < 40; i++) {
+    const s = document.createElement("div");
+    s.className = "star";
+    s.style.left = (Math.random() * 100) + "%";
+    s.style.top = (Math.random() * 50) + "%";
+    s.style.animationDelay = (Math.random() * 3) + "s";
+    box.appendChild(s);
+  }
+})();
+
+/* ============ 背景图接口 (chat_bg.jpg 优先, 否则 welcome_bg.jpg) ============ */
+(function tryBg() {
+  const img = new Image();
+  img.onload = () => document.getElementById("bg-image").classList.add("show");
+  img.onerror = () => {
+    const img2 = new Image();
+    img2.onload = () => document.getElementById("bg-image").classList.add("show");
+    img2.src = "/static/welcome_bg.jpg";
+  };
+  img.src = "/static/chat_bg.jpg";
+})();
+
+/* ============ 聊天 ============ */
+const chat = document.getElementById("view-chat");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const STORE_KEY = "***";
+
+function addMsg(role, text, meta, save = true) {
+  const d = document.createElement("div");
+  d.className = "msg " + role;
+  if (meta) d.innerHTML = `<div class="meta">${meta}</div>`;
+  d.appendChild(document.createTextNode(text));
+  if (role === "bot" && text) {
+    const spk = document.createElement("span");
+    spk.className = "spk";
+    spk.textContent = "🔊";
+    spk.title = "她说给你听";
+    spk.onclick = () => speak(text);
+    d.appendChild(spk);
+  }
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  if (save && role !== "bot") persist(role, text);
+  return d;
+}
+function persist(role, text) {
+  try {
+    const rows = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+    rows.push([role, text]);
+    if (rows.length > 60) rows.splice(0, rows.length - 60);
+    localStorage.setItem(STORE_KEY, JSON.stringify(rows));
+  } catch (e) {}
+}
+function loadHistory() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+    if (rows.length) {
+      for (const [role, text] of rows) addMsg(role, text, null, false);
+      chat.scrollTop = chat.scrollHeight;
+    } else {
+      addMsg("bot", greetByTime(), "🕐 " + todayStr(), false);
+    }
+  } catch (e) {
+    addMsg("bot", greetByTime(), {text: "🕐 " + todayStr()}, false);
+  }
+}
+function todayStr() {
+  const d = new Date();
+  return (d.getMonth() + 1) + "月" + d.getDate() + "日";
+}
+/* 时段问候 */
+function greetByTime() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 9) return "早上好呀！我是珞珞～今天也要开心哦！";
+  if (h >= 9 && h < 13) return "你好呀！我是珞珞～今天想聊点什么？";
+  if (h >= 13 && h < 18) return "下午好呀！我是珞珞～你终于来啦。";
+  if (h >= 18 && h < 23) return "晚上好！我是珞珞～今天过得怎么样？";
+  return "这么晚还没睡呀……我是珞珞，陪你一会儿。";
+}
+function setBusy(b) {
+  sendBtn.disabled = b;
+  input.disabled = b;
+}
+async function sendMsg() {
+  const msg = input.value.trim();
+  if (!msg || sendBtn.disabled) return;
+  input.value = "";
+  addMsg("user", msg);
+  setBusy(true);
+  maybeAction();  // 她先有个小动作
+  const bubble = addMsg("bot", "", null, false);
+  bubble.classList.add("typing");
+  let full = "";
+  try {
+    const resp = await fetch("/api/chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message: msg, max_tokens: 200})
+    });
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      const lines = buf.split("\n\n");
+      buf = lines.pop();
+      for (const l of lines) {
+        if (!l.startsWith("data: ")) continue;
+        const j = JSON.parse(l.slice(6));
+        if (j.delta) { full += j.delta; bubble.textContent = full; chat.scrollTop = chat.scrollHeight; }
+        if (j.done && j.full && j.full !== full) { full = j.full; bubble.textContent = full; chat.scrollTop = chat.scrollHeight; }
+        if (j.error) { bubble.textContent = "⚠️ " + j.error; }
+      }
+    }
+    bubble.classList.remove("typing");
+    persist("bot", full);
+    careIfNeeded(msg);  // 回复完成后 → 生活场景 (不阻塞聊天)
+    refreshSide();
+  } catch (e) {
+    bubble.classList.remove("typing");
+    bubble.textContent = "⚠️ 出错了: " + e.message;
+  }
+  setBusy(false);
+}
+input.addEventListener("keydown", e => { if (e.key === "Enter") sendMsg(); });
+
+/* ============ 语音输入 ASR (Web Speech API, 零依赖) ============ */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recog = null;
+let recogOn = false;
+function toggleMic() {
+  const btn = document.getElementById("mic");
+  if (!SpeechRec) { alert("语音输入不可用：浏览器不支持（建议 Chrome），请打字~"); return; }
+  if (recogOn) { recog.stop(); return; }
+  if (!recog) {
+    recog = new SpeechRec();
+    recog.lang = "zh-CN";
+    recog.interimResults = false;
+    recog.continuous = false;
+    recog.onresult = e => {
+      const t = e.results[0][0].transcript;
+      input.value = t;
+      recogOn = false;
+      btn.classList.remove("listening");
+      sendMsg();  // 识别完直接发送
+    };
+    recog.onerror = e => {
+      recogOn = false;
+      btn.classList.remove("listening");
+      if (e.error !== "aborted") alert("没听清，再说一次？(" + e.error + ")");
+    };
+    recog.onend = () => { recogOn = false; btn.classList.remove("listening"); };
+  }
+  recogOn = true;
+  btn.classList.add("listening");
+  recog.start();
+}
+
+/* ============ 语音: 她说给你听 (浏览器TTS, 零依赖) ============ */
+let zhVoice = null;
+function pickVoice() {
+  const vs = speechSynthesis.getVoices();
+  zhVoice = vs.find(v => v.lang && v.lang.toLowerCase().startsWith("zh")) || null;
+}
+pickVoice();
+speechSynthesis.onvoiceschanged = pickVoice;
+function speak(text) {
+  if (!text) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(/[（）()【】\[\]\*_~`#]/g, " "));
+  if (zhVoice) u.voice = zhVoice;
+  u.lang = "zh-CN";
+  u.rate = 1.02;
+  u.pitch = 1.15; // 少女音高
+  speechSynthesis.speak(u);
+}
+function speakLast() {
+  const last = chat.querySelector(".msg.bot");
+  if (last) speak(last.textContent.replace(/🔊/g, "").trim());
+}
+
+/* ============ 她来找你 (主动消息) ============ */
+let initSeen = "";
+try { initSeen = localStorage.getItem("luoluo_init_seen") || ""; } catch (e) {}
+function flashTitle(times) {
+  const orig = document.title;
+  let i = 0;
+  const t = setInterval(() => {
+    document.title = (i++ % 2) ? orig : "💬 珞珞来找你了";
+    if (i >= times * 2) { clearInterval(t); document.title = orig; }
+  }, 700);
+}
+async function checkInitiative() {
+  try {
+    const r = await fetch("/api/initiative/latest").then(r => r.json());
+    if (!r.latest || !r.items) return;
+    const fresh = r.items.filter(m => m.time > initSeen);
+    if (!fresh.length) return;
+    for (const m of fresh.slice(0, 2).reverse()) {
+      const d = document.createElement("div");
+      d.className = "msg notice";
+      const when = (m.time || "").slice(5, 16).replace("T", " ");
+      d.innerHTML = `<div>💬 她刚才来找过你：</div><div>“${escapeHtml(m.text)}”</div><div class="n-time">${when}</div>`;
+      chat.appendChild(d);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    initSeen = r.latest;
+    try { localStorage.setItem("luoluo_init_seen", initSeen); } catch (e) {}
+    flashTitle(4);
+  } catch (e) {}
+}
+
+/* ============ 她的身体 (赛博生理) ============ */
+function driveColor(v) {
+  if (v >= 85) return "#ef5350";
+  if (v >= 65) return "#ff9800";
+  if (v >= 40) return "#ffd54f";
+  return "#8bc34a";
+}
+function loadBody(drives, feel) {
+  const map = {
+    hunger: ["dv-hunger", "dv-hunger-v", 100 - (drives.hunger || 0)],   // 饱食度
+    thirst: ["dv-thirst", "dv-thirst-v", drives.thirst || 0],
+    sleep: ["dv-sleep", "dv-sleep-v", drives.sleep || 0],
+    social: ["dv-social", "dv-social-v", drives.social || 0],
+    curio: ["dv-curio", "dv-curio-v", drives.curiosity || 0],
+  };
+  const labels = {hunger: "饱食", thirst: "口渴", sleep: "困倦", social: "想聊天", curio: "好奇"};
+  for (const k in map) {
+    const [bar, val, v] = map[k];
+    const el = document.getElementById(bar);
+    const ev = document.getElementById(val);
+    el.style.width = Math.min(100, Math.max(0, v)) + "%";
+    el.style.background = driveColor(v);
+    ev.textContent = labels[k] + " " + Math.round(v) + "%";
+  }
+  document.getElementById("drive-feel").textContent =
+    (feel || "（她暂时没觉得什么）").replace(/你此刻/g, "她此刻").replace(/你的身体/g, "她的身体");
+}
+
+/* ============ 昨晚的梦 ============ */
+const DREAM_EMOJI = {好: "睡得香香的", 一般: "睡得一般般", 差: "没睡好，有点起床气"};
+async function loadDream() {
+  try {
+    const r = await fetch("/api/dream").then(r => r.json());
+    if (r.dream) {
+      document.getElementById("dream-text").textContent = r.dream;
+      document.getElementById("dream-quality").textContent =
+        DREAM_EMOJI[r.quality] ? "（" + DREAM_EMOJI[r.quality] + "）" : "";
+    }
+  } catch (e) {}
+}
+
+/* ============ 她的白日梦 + 愿望 (想象系统) ============ */
+async function loadDaydream() {
+  try {
+    const r = await fetch("/api/daydream").then(r => r.json());
+    if (r.daydream) document.getElementById("daydream-text").textContent = "💭 " + r.daydream;
+  } catch (e) {}
+  try {
+    const r = await fetch("/api/wishes").then(r => r.json());
+    const w = r.wishes || [];
+    document.getElementById("wish-list").innerHTML = w.length
+      ? "⭐ 她的小心愿：" + w.slice(-3).map(x => x.text).join("；")
+      : "";
+  } catch (e) {}
+}
+
+/* ============ 她的故事 (自我叙事) ============ */
+const STORY_EMOJI = {joy: "😊", sadness: "😢", anger: "😠", fear: "😨", warmth: "🥰", curiosity: "🤔", calm: "🙂"};
+function storyAgeLabel(age) {
+  if (age === null || age === undefined) return "?";
+  return age + "岁";
+}
+async function loadStory() {
+  const panel = document.getElementById("story-panel");
+  try {
+    const r = await fetch("/api/story").then(r => r.json());
+    if (r.profile) {
+      document.getElementById("story-profile").textContent = "“" + r.profile + "”";
+    }
+    const chBox = document.getElementById("story-chapters");
+    const chapters = r.chapters || [];
+    if (!chapters.length) { chBox.innerHTML = "（她的故事还在长大…）"; return; }
+    chBox.innerHTML = chapters.map(ch => {
+      const items = (ch.items || []).map(it => {
+        const emo = STORY_EMOJI[it.emo] || "·";
+        return `<div style="font-size:11.5px;line-height:1.6;opacity:.85;padding-left:8px;border-left:2px solid rgba(200,150,175,.3);margin:3px 0">
+          <span style="opacity:.5;font-size:10px">${storyAgeLabel(it.age)}</span> ${emo} ${escapeHtml(it.text.slice(0, 42))}${it.text.length > 42 ? "…" : ""}</div>`;
+      }).join("");
+      return `<div><div style="font-size:12px;font-weight:bold;opacity:.75;margin-bottom:2px">${ch.label}</div>${items || `<div style="font-size:11px;opacity:.4">${ch.hint}</div>`}</div>`;
+    }).join("");
+  } catch (e) { panel.innerHTML = "（加载失败）"; }
+}
+
+/* ============ 她心里有杆秤 (价值观) ============ */
+async function loadValues() {
+  try {
+    const r = await fetch("/api/values").then(r => r.json());
+    const vals = r.values || [];
+    const box = document.getElementById("values-list");
+    if (!vals.length) { box.innerHTML = "（她还在从生活里慢慢明白自己在乎什么…）"; return; }
+    box.innerHTML = vals.map(v =>
+      `<div style="font-size:12px;line-height:1.6">
+        <div style="display:flex;gap:6px;align-items:baseline"><span style="opacity:.7">⚖️</span><span>${escapeHtml(v.text)}</span></div>
+        <div style="font-size:10.5px;opacity:.5;padding-left:18px">因为${escapeHtml(v.source)}</div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+/* ============ 她的房间 (独立生活模拟) ============ */
+async function loadRoom() {
+  try {
+    const r = await fetch("/api/room").then(r => r.json());
+    const rm = r.room || {};
+    const desk = rm.desk || {}, bed = rm.bed || {}, win = rm.window || {};
+    const bal = rm.balcony || {}, shelf = rm.shelf || {};
+    const plant = win.plant_health >= 70 ? "🌱 精神" : win.plant_health >= 40 ? "🌿 还行" : "🥀 有点蔫";
+    const flower = (bal.flower || {}).alive ? "🌸 开着" : "🌾 谢了";
+    const grave = (bal.gravestone || {}).last_visit ? "🪦 刚看过泡泡" : "🪦 泡泡的墓碑";
+    document.getElementById("room-grid").innerHTML = [
+      `📖 书桌：${desk.diary_open ? "日记本摊开" : "收拾整齐"}${desk.works ? "·作文x" + desk.works : ""}`,
+      `🛏 床：${bed.made ? "叠好了" : "没叠"}${bed.last_sleep ? "" : "·还没睡过"}`,
+      `🪟 窗台：${plant}`,
+      `🌺 阳台：${flower}${(bal.flower || {}).watered ? "" : ""}`,
+      `${grave}`,
+      `📚 书架：${(shelf.books || []).slice(0, 2).join("、")}`,
+    ].map(x => `<div>${x}</div>`).join("");
+  } catch (e) {}
+}
+
+/* ============ 她的世界 (关系系统 V2) ============ */
+const ROLE_TONE_ICON = {warm: "☀️", neutral: "⛅", sulky: "🌧", hurt: "🌧", cold: "❄️", sleeping: "🌙"};
+async function loadRoles() {
+  const box = document.getElementById("roles-panel");
+  try {
+    const r = await fetch("/api/roles").then(r => r.json());
+    const roles = r.roles || [];
+    if (!roles.length) { box.innerHTML = "（还没有认识的人）"; return; }
+    box.innerHTML = roles.filter(x => x.type !== "subai").map(x => {
+      const icon = ROLE_TONE_ICON[x.tone] || "⛅";
+      const bar = Math.max(4, x.intimacy);
+      const color = x.intimacy >= 70 ? "#8bc34a" : x.intimacy >= 40 ? "#ffd54f" : "#b0a8a0";
+      return `<div style="display:flex;align-items:center;gap:7px;padding:3px 0;border-bottom:1px dashed rgba(150,140,120,.18)">
+        <span style="width:20px;text-align:center">${x.emoji}</span>
+        <span style="width:44px;font-size:12px">${x.name}</span>
+        <div style="flex:1;height:5px;border-radius:3px;background:rgba(150,140,150,.18);overflow:hidden"><div style="width:${bar}%;height:100%;background:${color};border-radius:3px"></div></div>
+        <span style="font-size:11px;opacity:.8">${icon}${x.intimacy}</span>
+      </div>`;
+    }).join("") + (roles.some(x => x.type === "subai") ?
+      `<div style="padding:4px 0;font-size:11px;opacity:.5">🌙 还有一位转学生没醒来…</div>` : "");
+  } catch (e) { box.innerHTML = "（加载失败）"; }
+}
+
+/* ============ 她的心事 (情绪反思) ============ */
+async function loadReflect() {
+  try {
+    const r = await fetch("/api/reflect").then(r => r.json());
+    const box = document.getElementById("reflect-text");
+    if (!r.negative) {
+      box.textContent = "（她今天心情还不错，没什么心事）";
+    } else if (r.reflection) {
+      box.textContent = "🤔 " + r.reflection;
+    } else {
+      box.textContent = "（她好像有点情绪，还没想明白为什么）";
+    }
+  } catch (e) {}
+}
+
+/* ============ 心情周记 ============ */
+const MOOD_COLOR = {
+  "开心": "#8bc34a", "高兴": "#8bc34a", "太棒": "#66bb6a", "爽": "#66bb6a",
+  "平稳": "#b0a8a0", "平静": "#b0a8a0",
+  "难过": "#64b5f6", "伤心": "#64b5f6", "非常难过": "#42a5f5", "委屈": "#ab47bc",
+  "生气": "#ef5350", "愤怒": "#ef5350", "气死": "#ef5350",
+  "赌气": "#ff9800", "烦": "#ff9800", "冷淡": "#78909c", "紧张": "#ffa726",
+};
+function moodColor(m) {
+  if (!m) return "rgba(160,160,160,.25)";
+  for (const k in MOOD_COLOR) if (m.includes(k)) return MOOD_COLOR[k];
+  return "#e0a0b8";
+}
+async function loadMoodWeek() {
+  const box = document.getElementById("mood-week");
+  try {
+    const r = await fetch("/api/mood/history").then(r => r.json());
+    const hist = r.history || {};
+    const days = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      days.push({key, label: "周" + "日一二三四五六"[d.getDay()], mood: hist[key] || "", today: i === 0});
+    }
+    box.innerHTML = days.map(d =>
+      `<div class="mw-day${d.today ? " today" : ""}" title="${d.key} ${d.mood || "无记录"}">
+        <div class="mw-dot" style="background:${moodColor(d.mood)}"></div>
+        <div class="mw-name">${d.mood || "·"}</div>
+        <div class="mw-label">${d.today ? "今天" : d.label}</div>
+      </div>`).join("");
+  } catch (e) { box.innerHTML = "（加载失败）"; }
+}
+
+/* ============ 侧栏 ============ */
+const MOOD_EMOJI = {sulky: "😤", hurt: "🥺", cold: "😶", warm: "😊", normal: "🙂", happy: "😊", sad: "😢", angry: "😠", calm: "🙂"};
+async function refreshSide() {
+  try {
+    const r = await fetch("/api/status").then(r => r.json());
+    const rawMood = (r.mood || "平稳");
+    const moodText = rawMood.replace(/^你现在的心情[：:]/g, "").trim() || "平稳";
+    const emo = MOOD_EMOJI[moodText] || (moodText.includes("开心") ? "😊" : moodText.includes("难过") ? "😢" : moodText.includes("生气") ? "😠" : "🙂");
+    document.getElementById("mood-box").innerHTML = "心情：" + moodText + " " + emo;
+    applyWeather(moodText);
+  } catch (e) {}
+  try {
+    const r = await fetch("/api/memories?top=6").then(r => r.json());
+    if (r.items) document.getElementById("mem-list").innerHTML = r.items.map(m =>
+      `<div>${escapeHtml(m.text.slice(0, 42))}${m.text.length > 42 ? "…" : ""}</div>`).join("");
+  } catch (e) { document.getElementById("mem-list").innerHTML = "（加载失败）"; }
+  try {
+    const r = await fetch("/api/relation").then(r => r.json());
+    const emo = MOOD_EMOJI[r.mood] || "🙂";
+    document.getElementById("rel-box").innerHTML =
+      (r.line ? r.line + " " + emo : "（她还不太了解你）🙂");
+  } catch (e) {}
+  try {
+    const r = await fetch("/api/status").then(r => r.json());
+    if (r.drives) loadBody(r.drives, r.drive_line);
+  } catch (e) {}
+}
+
+/* ============ 心情天空: 她的心情变成天气 (背景级) ============ */
+(function makeRain() {
+  const w = document.getElementById("weather");
+  for (let i = 0; i < 26; i++) {
+    const d = document.createElement("div");
+    d.className = "raindrop";
+    d.style.left = (Math.random() * 100) + "vw";
+    d.style.animationDuration = (0.4 + Math.random() * 0.55) + "s";
+    d.style.animationDelay = (-Math.random() * 0.95) + "s";
+    d.style.opacity = (0.35 + Math.random() * 0.55).toFixed(2);
+    w.appendChild(d);
+  }
+})();
+function applyWeather(moodText) {
+  const w = document.getElementById("weather");
+  w.className = "";
+  document.body.classList.remove("mood-sad", "mood-happy", "mood-sulky");
+  if (!moodText) return;
+  if (moodText.includes("难过") || moodText.includes("伤心") || moodText.includes("委屈")) {
+    w.className = moodText.includes("非常") ? "rain heavy" : "rain";
+    document.body.classList.add("mood-sad");
+  } else if (moodText.includes("生气") || moodText.includes("气") || moodText.includes("赌气")) {
+    w.className = "cloudy";
+    document.body.classList.add("mood-sulky");
+  } else if (moodText.includes("开心") || moodText.includes("高兴") || moodText.includes("太棒") || moodText.includes("爽")) {
+    w.className = "sunny";
+    document.body.classList.add("mood-happy");
+  }
+}
+
+/* ============ 对话小动作 (身体感) ============ */
+const ACTIONS = ["（她歪了歪头）", "（她眨眨眼睛）", "（她托着腮想了想）", "（她翻了个白眼）",
+  "（她掰着手指头数了数）", "（她轻轻哼了一声）", "（她偷偷瞄了你一眼）", "（她把笔转了一圈）",
+  "（她伸了个懒腰）", "（她趴在桌上看着你）", "（她抿着嘴笑了一下）"];
+function maybeAction() {
+  if (Math.random() > 0.55) return;
+  const d = document.createElement("div");
+  d.className = "msg bot";
+  d.style.cssText = "max-width:60%;font-size:12px;opacity:.65;font-style:italic;padding:6px 12px;background:transparent;border:none;";
+  d.textContent = ACTIONS[Math.floor(Math.random() * ACTIONS.length)];
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+}
+async function doMind() {
+  const box = document.getElementById("mind-box");
+  box.textContent = "（她正在发呆…）";
+  try {
+    const r = await fetch("/api/mindstream", {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: "{}"}).then(r => r.json());
+    box.textContent = "💭 " + (r.text || "(什么都没想)") + (r.emotion ? `  [${r.emotion}]` : "");
+  } catch (e) { box.textContent = "⚠️ " + e.message; }
+}
+/* 自动滚动: 定时内心流 (scheduler 每20分钟生成一条) */
+async function loadMindLatest() {
+  try {
+    const r = await fetch("/api/mindstream/latest").then(r => r.json());
+    if (r.text) {
+      const box = document.getElementById("mind-box");
+      box.textContent = "💭 " + r.text + (r.time ? `  （${r.time}）` : "");
+    }
+  } catch (e) {}
+}
+
+/* ============ 视图切换 ============ */
+function showView(name) {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  document.getElementById("view-" + name).classList.add("active");
+  if (name === "moments") refreshMoments();
+  if (name === "diary") refreshDiaryToday();
+}
+
+/* ============ 朋友圈视图 ============ */
+async function refreshMoments() {
+  const feedEl = document.getElementById("mom-feed");
+  feedEl.innerHTML = "加载中…";
+  try {
+    const r = await fetch("/api/social/feed?limit=20").then(r => r.json());
+    feedEl.innerHTML = "";
+    if (!r.feed.length) feedEl.innerHTML = '<div class="warn">（她还没发过朋友圈）</div>';
+    for (const m of r.feed) {
+      const d = document.createElement("div");
+      d.className = "card";
+      const who = m.is_me ? "🧒 珞珞" : ("👤 " + m.who);
+      d.innerHTML = `<div class="c-head"><span>${who}</span><span>${m.ts}</span></div>
+        <div class="c-body">${escapeHtml(m.text)}</div>
+        <div class="c-actions">❤️ ${m.likes||0}${m.comments && m.comments.length ? " · 💬 " + m.comments.length : ""}</div>`;
+      if (m.is_me) {
+        const btns = document.createElement("div");
+        btns.className = "c-actions";
+        btns.style.marginTop = "6px";
+        btns.innerHTML = `<span class="lk" onclick="likeMoment('${m.id}')">👍 点赞</span>
+          <span class="lk" onclick="commentMoment('${m.id}')">💬 评论</span>`;
+        d.appendChild(btns);
+        if (m.comments && m.comments.length) {
+          const cl = document.createElement("div");
+          cl.className = "c-comments";
+          cl.innerHTML = m.comments.map(c => `<div><b>${c.who}</b>：${escapeHtml(c.text)}</div>`).join("");
+          d.appendChild(cl);
+        }
+      }
+      feedEl.appendChild(d);
+    }
+  } catch (e) { feedEl.innerHTML = '<div class="warn">⚠️ ' + escapeHtml(e.message) + "</div>"; }
+}
+async function likeMoment(id) {
+  await fetch("/api/social/like", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({moment_id:id})});
+  refreshMoments();
+}
+async function commentMoment(id) {
+  const t = prompt("评论珞珞的朋友圈：");
+  if (!t) return;
+  const r = await fetch("/api/social/comment", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({moment_id:id, text:t})}).then(r => r.json());
+  alert("珞珞回复：" + (r.reply || "（没回）"));
+  refreshMoments();
+}
+
+
+/* ============ 日记视图 (自发日记列表) ============ */
+async function refreshDiaryToday() {
+  const box = document.getElementById("diary-list");
+  box.innerHTML = "加载中…";
+  try {
+    const r = await fetch("/api/diaries?limit=10").then(r => r.json());
+    const items = r.items || [];
+    if (!items.length) {
+      box.innerHTML = '<div class="warn">（她还没写过日记，今晚 21:30 会写）</div>';
+      return;
+    }
+    box.innerHTML = "";
+    const today = new Date();
+    const todayKey = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+    for (const d of items) {
+      const card = document.createElement("div");
+      card.className = "card";
+      const isToday = d.date === todayKey;
+      card.innerHTML = `<div class="c-head"><span>${isToday ? "🕐 今天" : "🕐 " + d.date}</span></div>
+        <div class="c-body">${escapeHtml(d.text)}</div>`;
+      box.appendChild(card);
+    }
+  } catch (e) { box.innerHTML = '<div class="warn">⚠️ ' + escapeHtml(e.message) + "</div>"; }
+}
+
+/* ============ 写作工坊 (只有作文) ============ */
+async function doWrite(kind) {
+  const box = document.getElementById("write-result");
+  const label = "作文";
+  box.textContent = "（她开始写" + label + "…）";
+  try {
+    const r = await fetch("/api/write", {method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({kind})}).then(r => r.json());
+    box.textContent = "✍️ 她写的" + label + "：\n\n" + r.text;
+  } catch (e) { box.textContent = "⚠️ " + e.message; }
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ============ 照顾她: 场景化满足 (回复完成后触发) ============ */
+function careIfNeeded(msg) {
+  const eat = ["吃饭", "吃点", "饿", "干饭", "去吃", "吃东西", "吃吧", "去吃饭"];
+  const drink = ["喝水", "渴", "喝口水", "喝点水", "去喝水"];
+  const sleep = ["睡觉", "睡吧", "困了就去", "晚安", "去睡", "早点睡"];
+  let kind = "";
+  if (sleep.some(k => msg.includes(k))) kind = "sleep";
+  else if (drink.some(k => msg.includes(k))) kind = "drink";
+  else if (eat.some(k => msg.includes(k))) kind = "eat";
+  if (!kind) return;
+  fetch("/api/care", {method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({kind})})
+    .then(r => r.json())
+    .then(r => {
+      if (r.scene) {
+        const d = document.createElement("div");
+        d.className = "msg bot";
+        d.style.cssText = "max-width:66%;font-size:12.5px;opacity:.8;font-style:italic;padding:8px 13px;";
+        d.textContent = "🌸 " + r.scene;
+        chat.appendChild(d);
+        chat.scrollTop = chat.scrollHeight;
+        refreshSide();
+      }
+    })
+    .catch(() => {});
+}
+
+/* ============ 樱花瓣 ============ */
+(function makePetals() {
+  const box = document.getElementById("petals");
+  const n = 14;
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement("div");
+    p.className = "petal";
+    p.textContent = "🌸";
+    const size = 10 + Math.random() * 10;
+    p.style.left = (Math.random() * 100) + "vw";
+    p.style.fontSize = size + "px";
+    p.style.opacity = (0.3 + Math.random() * 0.4).toFixed(2);
+    p.style.animationDuration = (9 + Math.random() * 10) + "s";
+    p.style.animationDelay = (-Math.random() * 18) + "s";
+    box.appendChild(p);
+  }
+})();
+
+/* ============ 启动 ============ */
+loadHistory();
+refreshSide();
+loadMoodWeek();
+loadDream();
+loadDaydream();
+loadStory();
+loadValues();
+loadReflect();
+loadRoom();
+loadRoles();
+loadMindLatest();
+checkInitiative();
+setInterval(refreshSide, 60000);
+setInterval(checkInitiative, 60000);
+setInterval(loadMindLatest, 60000);
+setInterval(loadMoodWeek, 600000); // 周记每10分钟刷新一次
+</script>
+</body>
+</html>

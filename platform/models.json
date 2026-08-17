@@ -1,0 +1,33 @@
+{
+  "说明": "模型注册表 — 想加/改子AI 直接编辑本文件，不用动代码。icon 可以是 emoji，也可以是图片路径(如 /static/avatars/xx.png，图片放 static/avatars/ 目录)",
+  "models": [
+    {
+      "id": "luoluo",
+      "name": "蠢珞珞",
+      "desc": "14岁 · 初二",
+      "version": "V16",
+      "status": "online",
+      "url": "/chat",
+      "icon": "🍭",
+      "blurb": "一个正在长大的AI女孩。她记得你，会想你想你，也会生你的气。"
+    },
+    {
+      "id": "future-1",
+      "name": "未来子AI",
+      "desc": "尚未苏醒",
+      "status": "sleeping",
+      "url": "",
+      "icon": "🌙",
+      "blurb": "还在混沌中孕育……有一天她会醒来。"
+    },
+    {
+      "id": "future-2",
+      "name": "未来子AI",
+      "desc": "尚未苏醒",
+      "status": "sleeping",
+      "url": "",
+      "icon": "🌙",
+      "blurb": "还在混沌中孕育……有一天她会醒来。"
+    }
+  ]
+}

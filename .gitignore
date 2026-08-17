@@ -1,0 +1,10 @@
+# 数据 (她的记忆/状态是私人的, 不进仓库)
+data/
+*.log
+__pycache__/
+*.pyc
+.env
+platform/_*.log
+
+# 软著/专利材料 (公开会破坏专利新颖性, 永不入仓库)
+release/
