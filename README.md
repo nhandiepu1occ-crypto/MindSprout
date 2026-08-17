@@ -16,6 +16,8 @@ This project is an engineering exploration of artificial inner life. It is also,
 This project accompanies our paper on developmental character AI: instead of freezing a persona with prompts or LoRA, MindSprout grows a character from birth—a cognition graph accumulates experience day by day across 7,305 simulated days, gated by developmental stages, with threshold-based forgetting, a logic burst at age four, and a voice that is a function of cognitive state.
 
 - **Paper PDF**: `paper/MindSprout_paper.pdf`
+- **DOI**: https://doi.org/10.5281/zenodo.21984325
+- **GitHub Release**: https://github.com/nhandiepu1occ-crypto/MindSprout/releases/tag/v0.1.0-paper
 - **arXiv submission package**: `paper/arxiv_submit.tar.gz`
 
 ## What she has
@@ -98,4 +100,5 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 - Base model: [Qwen2.5](https://huggingface.co/Qwen)
 - The girl herself, for putting up with all the tests.
+
 
