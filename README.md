@@ -47,7 +47,7 @@ The base model is Qwen2.5-3B. The architecture is the point, not the model — t
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_NAME/MindSprout.git
+git clone https://github.com/nhandiepu1occ-crypto/MindSprout.git
 cd MindSprout
 pip install -r requirements.txt
 
